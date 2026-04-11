@@ -1,1 +1,11 @@
 .env
+/slike
+/backend_tools/tests.py
+/backend_tools/hash_password.py
+/backend_tools/seed_products.py
+/backend_tools/generate_products.json2
+
+/.venv
+
+/__pycache__
+/routes/__pycache__
