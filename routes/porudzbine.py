@@ -5,7 +5,9 @@ import psycopg2
 import os
 import json
 from datetime import datetime
+from decimal import Decimal
 from dotenv import load_dotenv
+from mailManager import send_html_email
 
 load_dotenv()
 
@@ -21,6 +23,138 @@ def get_db_connection():
         port=os.getenv('PORT', 5432)
     )
     return conn
+
+
+def convert_decimal_to_float(obj):
+    """Konvertuje sve Decimal objekte u float za JSON serijalizaciju"""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    elif isinstance(obj, dict):
+        return {k: convert_decimal_to_float(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_decimal_to_float(item) for item in obj]
+    return obj
+
+
+def create_order_email_html(porudzbina_id, ime, prezime, email, telefon, adresa, korpa, cena):
+    """
+    Kreira HTML mejl sa detaljima narudžbine (bosanski, sa code-variant prikazom)
+    """
+    stavke_html = ""
+    for stavka in korpa:
+        code = stavka.get('code', 'N/A')
+        kolicina = stavka.get('kolicina', 0)
+        cena_po_komadu = stavka.get('cena_po_komadu', 0)
+        popust = stavka.get('popust', 0)
+        ukupno = stavka.get('ukupno', 0)
+        
+        link = f"http://localhost:3001/proizvodi/{code.split('-')[0] if '-' in code else code}"
+        
+        popust_text = f"({popust}% popusta)" if popust > 0 else ""
+        
+        stavke_html += f"""
+        <tr>
+            <td style="border: 1px solid #ddd; padding: 10px; text-align: center;">
+                <a href="{link}" style="color: #0066cc; text-decoration: none;">{code}</a>
+            </td>
+            <td style="border: 1px solid #ddd; padding: 10px; text-align: center;">{kolicina}</td>
+            <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">{cena_po_komadu:.2f} KM {popust_text}</td>
+            <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">{ukupno:.2f} KM</td>
+        </tr>
+        """
+    
+    html_content = f"""
+    <html dir="ltr" lang="bs">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{ font-family: Arial, sans-serif; background-color: #f5f5f5; }}
+            .container {{ max-width: 600px; margin: 20px auto; background-color: white; padding: 20px; border-radius: 8px; }}
+            .header {{ background-color: #333; color: white; padding: 20px; text-align: center; border-radius: 8px; }}
+            .content {{ padding: 20px; }}
+            .order-info {{ background-color: #f9f9f9; padding: 15px; border-left: 4px solid #0066cc; margin: 15px 0; }}
+            .customer-info {{ background-color: #f0f0f0; padding: 15px; margin: 15px 0; border-radius: 5px; }}
+            table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+            th {{ background-color: #0066cc; color: white; padding: 10px; text-align: left; }}
+            td {{ border: 1px solid #ddd; padding: 10px; }}
+            .total {{ font-size: 18px; font-weight: bold; text-align: right; padding: 10px; background-color: #f0f0f0; }}
+            .footer {{ text-align: center; padding: 20px; font-size: 12px; color: #666; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>✉️ Nova narudžba je primljena</h1>
+            </div>
+            
+            <div class="content">
+                <div class="order-info">
+                    <p><strong>Broj narudžbe:</strong> <span style="font-size: 18px; color: #0066cc;">#{porudzbina_id}</span></p>
+                    <p><strong>Datum:</strong> {datetime.now().strftime('%d.%m.%Y. %H:%M')}</p>
+                </div>
+                
+                <h3>📋 Informacije o kupcu</h3>
+                <div class="customer-info">
+                    <p><strong>Ime:</strong> {ime} {prezime}</p>
+                    <p><strong>Email:</strong> {email}</p>
+                    <p><strong>Telefon:</strong> {telefon}</p>
+                    <p><strong>Adresa:</strong> {adresa}</p>
+                </div>
+                
+                <h3>📦 Stavke u narudžbi</h3>
+                <table>
+                    <tr>
+                        <th>Proizvod (Kod)</th>
+                        <th>Količina</th>
+                        <th>Cijena po komadu</th>
+                        <th>Ukupno</th>
+                    </tr>
+                    {stavke_html}
+                    <tr style="background-color: #f0f0f0; font-weight: bold;">
+                        <td colspan="3" style="text-align: right; padding: 15px;">UKUPNA CIJENA:</td>
+                        <td style="text-align: right; padding: 15px; font-size: 16px;">{cena:.2f} KM</td>
+                    </tr>
+                </table>
+                
+                <p>Status narudžbe: <strong style="color: #ff9900;">U pripremi</strong></p>
+                <p><a href="http://localhost:3001/porudzbine/{porudzbina_id}" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Pregled narudžbe</a></p>
+            </div>
+            
+            <div class="footer">
+                <p>Ovo je automatska poruka. Molimo vas ne odgovarajte direktno na ovaj email.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_content = f"""
+    NOVA NARUDŽBA
+    
+    Broj narudžbe: #{porudzbina_id}
+    Datum: {datetime.now().strftime('%d.%m.%Y. %H:%M')}
+    
+    INFORMACIJE O KUPCU
+    Ime: {ime} {prezime}
+    Email: {email}
+    Telefon: {telefon}
+    Adresa: {adresa}
+    
+    STAVKE U NARUDŽBI
+    """
+    
+    for stavka in korpa:
+        code = stavka.get('code', 'N/A')
+        kolicina = stavka.get('kolicina', 0)
+        cena_po_komadu = stavka.get('cena_po_komadu', 0)
+        popust = stavka.get('popust', 0)
+        ukupno = stavka.get('ukupno', 0)
+        popust_text = f"({popust}% popusta)" if popust > 0 else ""
+        text_content += f"\n- {code}: {kolicina}x {cena_po_komadu:.2f} KM {popust_text} = {ukupno:.2f} KM"
+    
+    text_content += f"\n\nUKUPNA CIJENA: {cena:.2f} KM\n\nStatus: U pripremi"
+    
+    return html_content, text_content
 
 
 @porudzbine_bp.route('/post', methods=['POST'])
@@ -100,6 +234,64 @@ def dodaj_porudzbinu():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
+        # PRVO: Validacija stanja za SVE stavke u korpi
+        print("🔍 Proveravamo stanje proizvoda...")
+        for stavka in korpa:
+            code = stavka['code'].strip()
+            kolicina = int(stavka['kolicina'])
+            
+            # Pronađi proizvod
+            if '-' in code:
+                parts = code.split('-')
+                if len(parts) == 2:
+                    code_base = parts[0].strip()
+                    try:
+                        code_variant = int(parts[1].strip())
+                        cur.execute(
+                            "SELECT id, stanje, ime FROM proizvodi WHERE code_base = %s AND code_variant = %s",
+                            (code_base, code_variant)
+                        )
+                    except ValueError:
+                        cur.close()
+                        conn.close()
+                        return jsonify({"message": f"Neispravan format koda: {code}"}), 400
+                else:
+                    cur.close()
+                    conn.close()
+                    return jsonify({"message": f"Neispravan format koda: {code}"}), 400
+            else:
+                cur.execute(
+                    "SELECT id, stanje, ime FROM proizvodi WHERE code_base = %s ORDER BY code_variant ASC LIMIT 1",
+                    (code,)
+                )
+            
+            proizvod = cur.fetchone()
+            
+            if not proizvod:
+                cur.close()
+                conn.close()
+                return jsonify({"message": f"Proizvod sa kodom '{code}' ne postoji"}), 404
+            
+            # KRITIČNO: Proveri dostupnost
+            if proizvod['stanje'] < kolicina:
+                cur.close()
+                conn.close()
+                shortage = kolicina - proizvod['stanje']
+                print(f"❌ NEDOSTAJE STANJA: {proizvod['ime']} ({code}) - dostupno: {proizvod['stanje']}, traženo: {kolicina}")
+                return jsonify({
+                    "error": "insufficient_stock",
+                    "message": "Nema dovoljno komada!",
+                    "product": {
+                        "code": code,
+                        "name": proizvod['ime'],
+                        "available": proizvod['stanje'],
+                        "requested": kolicina,
+                        "shortage": shortage
+                    }
+                }), 409
+            
+            print(f"✅ OK: {proizvod['ime']} ({code}) - dostupno {proizvod['stanje']} kom")
+        
         # Validiraj i izračunaj cenu svih stavki
         ukupna_cena = 0
         validna_korpa = []
@@ -137,8 +329,8 @@ def dodaj_porudzbinu():
                 return jsonify({"message": f"Proizvod sa kodom '{code}' ne postoji"}), 404
             
             # Izračunaj cenu sa popustom
-            cena = proizvod['cena']
-            popust = proizvod['popust'] if proizvod['popust'] else 0
+            cena = float(proizvod['cena']) if isinstance(proizvod['cena'], Decimal) else proizvod['cena']
+            popust = float(proizvod['popust']) if isinstance(proizvod['popust'], Decimal) else (proizvod['popust'] if proizvod['popust'] else 0)
             cena_sa_popustom = cena - (cena * popust / 100)
             cena_stavke = cena_sa_popustom * kolicina
             
@@ -148,14 +340,20 @@ def dodaj_porudzbinu():
                 "code": code,
                 "proizvod_id": proizvod['id'],
                 "kolicina": kolicina,
-                "cena_po_komadu": cena,
-                "popust": popust,
-                "cena_sa_popustom": cena_sa_popustom,
-                "ukupno": cena_stavke
+                "cena_po_komadu": round(cena, 2),
+                "popust": round(popust, 2),
+                "cena_sa_popustom": round(cena_sa_popustom, 2),
+                "ukupno": round(cena_stavke, 2)
             })
         
-        # Konvertuј cenu u integer (dinare)
-        ukupna_cena = int(ukupna_cena)
+        # Zaokruži cenu na 2 decimale
+        ukupna_cena = round(float(ukupna_cena), 2)
+        
+        # Dodaj trošak dostave
+        ukupna_cena += 10
+        
+        # Konvertuj sve Decimal vrednosti u validnoj korpi u float
+        validna_korpa = convert_decimal_to_float(validna_korpa)
         
         # Ako je user_id prosleđen, validiraj da korisnik postoji
         if user_id:
@@ -180,15 +378,73 @@ def dodaj_porudzbinu():
         porudzbina_id = cur.fetchone()['id']
         
         conn.commit()
+        
+        # ODUZI STANJE iz proizvoda za svaku stavku u porudžbini
+        print(f"📦 Ažuriramo stanje za porudžbinu #{porudzbina_id}...")
+        for stavka in validna_korpa:
+            try:
+                cur.execute(
+                    "UPDATE proizvodi SET stanje = stanje - %s WHERE id = %s",
+                    (stavka['kolicina'], stavka['proizvod_id'])
+                )
+                print(f"✅ Stanje ažurirano: proizvod_id={stavka['proizvod_id']}, oduzeto={stavka['kolicina']} kom")
+            except Exception as e:
+                print(f"⚠️ Greška pri ažuriranju stanja: {str(e)}")
+                # Nastavi sa sledećom stavkom - ne blokira proces
+        
+        conn.commit()
+        
+        # Pripremi email sadržaj
+        html_content, text_content = create_order_email_html(
+            porudzbina_id, ime, prezime, email, telefon, adresa, validna_korpa, ukupna_cena
+        )
+        
+        # Pošalji mejl svim adminama (role = 1)
+        try:
+            cur.execute("SELECT email FROM users WHERE rola = 1")
+            admini = cur.fetchall()
+            
+            if admini:
+                print(f"📧 Slanje mejla adminama:")
+                for admin in admini:
+                    admin_email = admin['email']
+                    print(f"   → {admin_email}")
+                    send_html_email(
+                        to_email=admin_email,
+                        subject=f"🎉 Nova narudžbina #{porudzbina_id} - {ime} {prezime}",
+                        html_content=html_content,
+                        text_content=text_content
+                    )
+        except Exception as e:
+            print(f"⚠️ Greška pri slanju mejla adminama: {str(e)}")
+        
+        # Pošalji mejl i kupcu na email iz payloada
+        if email:
+            try:
+                print(f"📧 Slanje mejla kupcu:")
+                print(f"   → {email}")
+                send_html_email(
+                    to_email=email,
+                    subject=f"✅ Vaša narudžbina #{porudzbina_id} je primljena",
+                    html_content=html_content,
+                    text_content=text_content
+                )
+            except Exception as e:
+                print(f"⚠️ Greška pri slanju mejla kupcu: {str(e)}")
+        
         cur.close()
         conn.close()
+        
+        # Konvertuj Decimal u float za JSON
+        cena_json = convert_decimal_to_float(ukupna_cena)
+        korpa_json = convert_decimal_to_float(validna_korpa)
         
         return jsonify({
             "id": porudzbina_id,
             "poruka": "Porudzbina uspešno kreirana",
-            "cena": ukupna_cena,
+            "cena": cena_json,
             "broj_stavki": len(validna_korpa),
-            "korpa": validna_korpa
+            "korpa": korpa_json
         }), 201
         
     except Exception as e:
@@ -374,8 +630,11 @@ def get_porudzbine():
         ukupno_strana = (ukupno + limit - 1) // limit if limit > 0 else 1
         trenutna_strana = (offset // limit + 1) if limit > 0 else 1
         
+        # Konvertuj Decimal u float za JSON
+        result_porudzbine_json = convert_decimal_to_float(result_porudzbine)
+        
         return jsonify({
-            "porudzbine": result_porudzbine,
+            "porudzbine": result_porudzbine_json,
             "pagination": {
                 "limit": limit,
                 "offset": offset,

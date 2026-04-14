@@ -45,7 +45,7 @@ def get_kupci():
                 "id": 1,
                 "ime": "Nemanja",
                 "prezime": "Jakovljevic",
-                "email": "njakovlje@gmail.com",
+                "email": "example@gmail.com",
                 "telefon": "+381631234567",
                 "adresa": "Kneza Milaša 5, Beograd"
             },

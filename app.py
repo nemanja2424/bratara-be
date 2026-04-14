@@ -45,16 +45,9 @@ app.register_blueprint(kupci_bp, url_prefix="/api/kupci")
 from routes.porudzbine import porudzbine_bp
 app.register_blueprint(porudzbine_bp, url_prefix="/api/porudzbine")
 
-@app.route('/api/hello', methods=['GET'])
-def hello():
-    # Pošalji mejl koristeći mailManager.py
-    send_email(
-        to_email="njakovlje@gmail.com",
-        subject="Hello iz shopa",
-        content="Hello iz shopa"
-    )
-    
-    return jsonify({"message": "Zdravo iz Flask API-ja!"})
+from routes.omiljeno import omiljeno_bp
+app.register_blueprint(omiljeno_bp, url_prefix="/api/omiljeno")
+
 
 # Pokretanje aplikacije
 if __name__ == '__main__':

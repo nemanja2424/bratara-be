@@ -182,6 +182,7 @@ def preuzmi_sliku(filename):
 
 
 @proizvodi_bp.route('/get', methods=['GET'])
+@jwt_required(optional=True)
 def get_proizvodi():
     """
     Preuzima sve proizvode sa paginacijom
@@ -196,6 +197,9 @@ def get_proizvodi():
     - /get?limit=10&offset=0     # Првих 10
     - /get?code_base=du45m9vsuu  # Samo proizvodi sa tim code_base
     
+    Napomena: Admini (rola=1) i staff (rola=2) vide sve proizvode uključujući one bez stanja.
+              Ostali korisnici vide samo proizvode koji su na stanju.
+    
     Response:
     {
         "proizvodi": [...],
@@ -207,6 +211,20 @@ def get_proizvodi():
     }
     """
     try:
+        # Proverava da li je korisnik admin ili staff
+        current_user_id = get_jwt_identity()
+        rola = 0  # Default rola za nekorisnike ili regular customers
+        
+        if current_user_id:
+            conn_user = get_db_connection()
+            cur_user = conn_user.cursor(cursor_factory=RealDictCursor)
+            cur_user.execute("SELECT rola FROM users WHERE id = %s", (int(current_user_id),))
+            user = cur_user.fetchone()
+            if user:
+                rola = user['rola']
+            cur_user.close()
+            conn_user.close()
+        
         limit = request.args.get('limit', 20, type=int)
         offset = request.args.get('offset', 0, type=int)
         search = request.args.get('search', '').strip()
@@ -305,10 +323,10 @@ def get_proizvodi():
         if group_by == 'code_base':
             where_conditions.append("p.code_variant = 1")
         
-        # Filter po minimumu stanja
-        if min_stanje > 0:
-            where_conditions.append("p.stanje >= %s")
-            params.append(min_stanje)
+        # Filter po dostupnosti - samo za obične korisnike (rola 0) i nekorisnike
+        # Admin (rola 1) i staff (rola 2) vide sve proizvode
+        if rola not in [1, 2]:  # Ako NIJE admin ili staff
+            where_conditions.append("p.stanje > 0")
         
         where_clause = ""
         if where_conditions:
