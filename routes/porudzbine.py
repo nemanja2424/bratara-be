@@ -6,6 +6,7 @@ import os
 import json
 from datetime import datetime
 from decimal import Decimal
+import threading
 from dotenv import load_dotenv
 from mailManager import send_html_email
 
@@ -36,10 +37,18 @@ def convert_decimal_to_float(obj):
     return obj
 
 
-def create_order_email_html(porudzbina_id, ime, prezime, email, telefon, adresa, korpa, cena):
+def create_order_email_html(porudzbina_id, ime, prezime, email, telefon, adresa, korpa, cena, is_admin=False):
     """
     Kreira HTML mejl sa detaljima narudžbine (bosanski, sa code-variant prikazom)
+    is_admin=True: link ide na admin panel (butikirna.com/admin/porudzbine/id)
+    is_admin=False: link ide na kupčinu stranicu (butikirna.com/narudzbina/id)
     """
+    # Odredi link na osnovu tipa korisnika
+    if is_admin:
+        pregled_link = f"https://butikirna.com/admin/porudzbine/{porudzbina_id}"
+    else:
+        pregled_link = f"https://butikirna.com/narudzbina/{porudzbina_id}"
+    
     stavke_html = ""
     for stavka in korpa:
         code = stavka.get('code', 'N/A')
@@ -48,7 +57,7 @@ def create_order_email_html(porudzbina_id, ime, prezime, email, telefon, adresa,
         popust = stavka.get('popust', 0)
         ukupno = stavka.get('ukupno', 0)
         
-        link = f"http://localhost:3001/proizvodi/{code.split('-')[0] if '-' in code else code}"
+        link = f"https://butikirna.com/proizvodi/{code.split('-')[0] if '-' in code else code}"
         
         popust_text = f"({popust}% popusta)" if popust > 0 else ""
         
@@ -89,7 +98,7 @@ def create_order_email_html(porudzbina_id, ime, prezime, email, telefon, adresa,
             
             <div class="content">
                 <div class="order-info">
-                    <p><strong>Broj narudžbe:</strong> <span style="font-size: 18px; color: #0066cc;">#{porudzbina_id}</span></p>
+                    <p><strong>ID narudžbe:</strong> <span style="font-size: 18px; color: #0066cc;">#{porudzbina_id}</span></p>
                     <p><strong>Datum:</strong> {datetime.now().strftime('%d.%m.%Y. %H:%M')}</p>
                 </div>
                 
@@ -117,7 +126,7 @@ def create_order_email_html(porudzbina_id, ime, prezime, email, telefon, adresa,
                 </table>
                 
                 <p>Status narudžbe: <strong style="color: #ff9900;">U pripremi</strong></p>
-                <p><a href="http://localhost:3001/porudzbine/{porudzbina_id}" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Pregled narudžbe</a></p>
+                <p><a href="{pregled_link}" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Pregled narudžbe</a></p>
             </div>
             
             <div class="footer">
@@ -131,7 +140,7 @@ def create_order_email_html(porudzbina_id, ime, prezime, email, telefon, adresa,
     text_content = f"""
     NOVA NARUDŽBA
     
-    Broj narudžbe: #{porudzbina_id}
+    ID narudžbe: #{porudzbina_id}
     Datum: {datetime.now().strftime('%d.%m.%Y. %H:%M')}
     
     INFORMACIJE O KUPCU
@@ -152,9 +161,196 @@ def create_order_email_html(porudzbina_id, ime, prezime, email, telefon, adresa,
         popust_text = f"({popust}% popusta)" if popust > 0 else ""
         text_content += f"\n- {code}: {kolicina}x {cena_po_komadu:.2f} KM {popust_text} = {ukupno:.2f} KM"
     
-    text_content += f"\n\nUKUPNA CIJENA: {cena:.2f} KM\n\nStatus: U pripremi"
+    text_content += f"\n\nUKUPNA CIJENA: {cena:.2f} KM\n\nStatus: U pripremi\n\nPregled narudžbe: {pregled_link}"
     
     return html_content, text_content
+
+
+def create_status_email_html(porudzbina_id, ime, prezime, status):
+    """
+    Kreira HTML mejl za obaveštavanje kupca o promeni statusa narudžbine
+    Status opcije: 'u_pripremi', 'u_tranzitu', 'dostavljeno', 'nedostavljeno'
+    """
+    pregled_link = f"https://butikirna.com/narudzbina/{porudzbina_id}"
+    
+    # Definiši poruke i boje po statusu
+    status_info = {
+        'u_pripremi': {
+            'naslov': '⏳ Vaša narudžbina je u pripremi',
+            'poruka': 'Vaša narudžbina se trenutno priprema za slanje. Čim bude spremna, izvešćemo vas!',
+            'boja': '#ff9900',
+            'emoji': '⏳'
+        },
+        'u_tranzitu': {
+            'naslov': '🚚 Vaša narudžbina je u tranzitu!',
+            'poruka': 'Vaša narudžbina je otpremljena i na putu prema vama!',
+            'boja': '#0099ff',
+            'emoji': '🚚'
+        },
+        'dostavljeno': {
+            'naslov': '✅ Vaša narudžbina je dostavljena!',
+            'poruka': 'Vaša narudžbina je uspešno dostavljena. Hvala što ste kupili kod nas!',
+            'boja': '#00cc00',
+            'emoji': '✅'
+        },
+        'nedostavljeno': {
+            'naslov': '⚠️ Vaša narudžbina nije preuzeta',
+            'poruka': 'Narudžbina nije preuzeta. Molimo vas da kontaktirate našu službu za klijente.',
+            'boja': '#ff3333',
+            'emoji': '⚠️'
+        }
+    }
+    
+    info = status_info.get(status, status_info['u_pripremi'])
+    
+    html_content = f"""
+    <html dir="ltr" lang="bs">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{ font-family: Arial, sans-serif; background-color: #f5f5f5; }}
+            .container {{ max-width: 600px; margin: 20px auto; background-color: white; padding: 20px; border-radius: 8px; }}
+            .header {{ background-color: #333; color: white; padding: 20px; text-align: center; border-radius: 8px; }}
+            .content {{ padding: 20px; }}
+            .status-box {{ background-color: #f9f9f9; padding: 20px; border-left: 5px solid {info['boja']}; margin: 20px 0; border-radius: 5px; }}
+            .status-message {{ font-size: 18px; font-weight: bold; color: {info['boja']}; margin-bottom: 10px; }}
+            .order-info {{ background-color: #f0f0f0; padding: 15px; border-radius: 5px; margin: 20px 0; }}
+            .footer {{ text-align: center; padding: 20px; font-size: 12px; color: #666; }}
+            .button {{ background-color: #0066cc; color: white !important; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 15px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>{info['emoji']} {info['naslov']}</h1>
+            </div>
+            
+            <div class="content">
+                <div class="status-box">
+                    <p class="status-message">{info['poruka']}</p>
+                    
+                    <div class="order-info">
+                        <p><strong>Broj narudžbe:</strong> #{porudzbina_id}</p>
+                        <p><strong>Datum:</strong> {datetime.now().strftime('%d.%m.%Y. %H:%M')}</p>
+                    </div>
+                    
+                    <p>Ime: <strong>{ime} {prezime}</strong></p>
+                </div>
+                
+                <p><a href="{pregled_link}" class="button">Pregled narudžbe</a></p>
+                
+                <p style="margin-top: 20px; font-size: 14px; color: #666;">
+                    Ako imate pitanja, molimo vas kontaktirajte našu službu za klijente.
+                </p>
+            </div>
+            
+            <div class="footer">
+                <p>Ovo je automatska poruka. Molimo vas ne odgovarajte direktno na ovaj email.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_content = f"""
+    {info['naslov']}
+    
+    {info['poruka']}
+    
+    Broj narudžbe: #{porudzbina_id}
+    Datum: {datetime.now().strftime('%d.%m.%Y. %H:%M')}
+    
+    Ime: {ime} {prezime}
+    
+    Pregled narudžbe: {pregled_link}
+    
+    Ako imate pitanja, molimo vas kontaktirajte našu službu za klijente.
+    """
+    
+    return html_content, text_content
+
+
+def send_order_emails_async(porudzbina_id, ime, prezime, email, telefon, adresa, validna_korpa, ukupna_cena):
+    """
+    Šalje mejlove asinhrono - pokrenuto u posebnom thread-u
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Pripremi email sadržaj
+        html_content_admin, text_content_admin = create_order_email_html(
+            porudzbina_id, ime, prezime, email, telefon, adresa, validna_korpa, ukupna_cena, is_admin=True
+        )
+        
+        html_content_kupac, text_content_kupac = create_order_email_html(
+            porudzbina_id, ime, prezime, email, telefon, adresa, validna_korpa, ukupna_cena, is_admin=False
+        )
+        
+        # Pošalji mejl svim adminama (role = 1)
+        try:
+            cur.execute("SELECT email FROM users WHERE rola = 1")
+            admini = cur.fetchall()
+            
+            if admini:
+                print(f"📧 Slanje mejla adminama:")
+                for admin in admini:
+                    admin_email = admin['email']
+                    print(f"   → {admin_email}")
+                    send_html_email(
+                        to_email=admin_email,
+                        subject=f"🎉 Nova narudžbina - {ime} {prezime}",
+                        html_content=html_content_admin,
+                        text_content=text_content_admin
+                    )
+        except Exception as e:
+            print(f"⚠️ Greška pri slanju mejla adminama: {str(e)}")
+        
+        # Pošalji mejl i kupcu na email iz payloada
+        if email:
+            try:
+                print(f"📧 Slanje mejla kupcu:")
+                print(f"   → {email}")
+                send_html_email(
+                    to_email=email,
+                    subject=f"✅ Vaša narudžbina je primljena",
+                    html_content=html_content_kupac,
+                    text_content=text_content_kupac
+                )
+            except Exception as e:
+                print(f"⚠️ Greška pri slanju mejla kupcu: {str(e)}")
+        
+        cur.close()
+        conn.close()
+        print(f"✅ Svi mejlovi za porudžbinu #{porudzbina_id} su poslani")
+        
+    except Exception as e:
+        print(f"❌ Greška pri slanju mejlova: {str(e)}")
+
+
+def send_status_email_async(porudzbina_id, ime, prezime, email, novi_status):
+    """
+    Šalje status mejl asinhrono - pokrenuto u posebnom thread-u
+    """
+    try:
+        if email:
+            html_content, text_content = create_status_email_html(
+                porudzbina_id,
+                ime,
+                prezime,
+                novi_status
+            )
+            
+            send_html_email(
+                to_email=email,
+                subject=f"Status vašne narudžbe - {novi_status.replace('_', ' ').title()}",
+                html_content=html_content,
+                text_content=text_content
+            )
+            print(f"📧 Status mejl poslat kupcu: {email}")
+        
+    except Exception as e:
+        print(f"⚠️ Greška pri slanju status mejla: {str(e)}")
 
 
 @porudzbine_bp.route('/post', methods=['POST'])
@@ -394,43 +590,13 @@ def dodaj_porudzbinu():
         
         conn.commit()
         
-        # Pripremi email sadržaj
-        html_content, text_content = create_order_email_html(
-            porudzbina_id, ime, prezime, email, telefon, adresa, validna_korpa, ukupna_cena
+        # Pokreni asinhrono slanje mejlova u posebnom thread-u
+        email_thread = threading.Thread(
+            target=send_order_emails_async,
+            args=(porudzbina_id, ime, prezime, email, telefon, adresa, validna_korpa, ukupna_cena),
+            daemon=True
         )
-        
-        # Pošalji mejl svim adminama (role = 1)
-        try:
-            cur.execute("SELECT email FROM users WHERE rola = 1")
-            admini = cur.fetchall()
-            
-            if admini:
-                print(f"📧 Slanje mejla adminama:")
-                for admin in admini:
-                    admin_email = admin['email']
-                    print(f"   → {admin_email}")
-                    send_html_email(
-                        to_email=admin_email,
-                        subject=f"🎉 Nova narudžbina #{porudzbina_id} - {ime} {prezime}",
-                        html_content=html_content,
-                        text_content=text_content
-                    )
-        except Exception as e:
-            print(f"⚠️ Greška pri slanju mejla adminama: {str(e)}")
-        
-        # Pošalji mejl i kupcu na email iz payloada
-        if email:
-            try:
-                print(f"📧 Slanje mejla kupcu:")
-                print(f"   → {email}")
-                send_html_email(
-                    to_email=email,
-                    subject=f"✅ Vaša narudžbina #{porudzbina_id} je primljena",
-                    html_content=html_content,
-                    text_content=text_content
-                )
-            except Exception as e:
-                print(f"⚠️ Greška pri slanju mejla kupcu: {str(e)}")
+        email_thread.start()
         
         cur.close()
         conn.close()
@@ -743,7 +909,21 @@ def azuriraj_status_porudzbine():
         cur.execute(update_query, (novi_status, porudzbina_id))
         result = cur.fetchone()
         
+        # Pročitaj podatke kupca za email
+        cur.execute("SELECT ime, prezime, email FROM porudzbine WHERE id = %s", (porudzbina_id,))
+        kupac_podaci = cur.fetchone()
+        
         conn.commit()
+        
+        # Pokreni asinhrono slanje status mejla u posebnom thread-u (ako ima email)
+        if kupac_podaci and kupac_podaci['email']:
+            email_thread = threading.Thread(
+                target=send_status_email_async,
+                args=(porudzbina_id, kupac_podaci['ime'], kupac_podaci['prezime'], kupac_podaci['email'], novi_status),
+                daemon=True
+            )
+            email_thread.start()
+        
         cur.close()
         conn.close()
         

@@ -27,7 +27,7 @@ CORS(app)
 
 # JWT Konfiguracija
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET', 'promeniti-tajni-kljuc')
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False
 jwt = JWTManager(app)
 
 from routes.auth import auth_bp
