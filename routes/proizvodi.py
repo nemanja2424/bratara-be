@@ -319,10 +319,6 @@ def get_proizvodi():
             where_conditions.append("p.code_base = %s")
             params.append(code_base)
         
-        # Grupisanje po code_base - prikaži samo prvu varijantu
-        if group_by == 'code_base':
-            where_conditions.append("p.code_variant = 1")
-        
         # Filter po dostupnosti - samo za obične korisnike (rola 0) i nekorisnike
         # Admin (rola 1) i staff (rola 2) vide sve proizvode
         if rola not in [1, 2]:  # Ako NIJE admin ili staff
@@ -332,7 +328,11 @@ def get_proizvodi():
         if where_conditions:
             where_clause = "WHERE " + " AND ".join(where_conditions)
         
-        count_query = f"SELECT COUNT(DISTINCT p.id) as ukupno FROM proizvodi p LEFT JOIN kategorije k ON p.kategorija = k.id {where_clause}"
+        # Za COUNT, prilagođavamo logiku kad verzamo group_by
+        if group_by == 'code_base':
+            count_query = f"SELECT COUNT(DISTINCT p.code_base) as ukupno FROM proizvodi p LEFT JOIN kategorije k ON p.kategorija = k.id {where_clause}"
+        else:
+            count_query = f"SELECT COUNT(DISTINCT p.id) as ukupno FROM proizvodi p LEFT JOIN kategorije k ON p.kategorija = k.id {where_clause}"
         cur.execute(count_query, params)
         ukupno_proizvoda = cur.fetchone()['ukupno']
         
@@ -341,7 +341,30 @@ def get_proizvodi():
         else:
             sort_field = f"p.{sort_by} {sort_order.upper()}"
         
-        query = f"""SELECT p.id, p.code_base, p.code_variant, p.ime, p.opis, p.stanje, p.boja, p.velicina, p.slike, p.fav, 
+        # Ako je group_by='code_base', koristi DISTINCT ON da biram best variant po code_base
+        if group_by == 'code_base':
+            # Subquery: primeni WHERE filters i biram DISTINCT ON (code_base)
+            # Prioritet: stanje DESC (one na stanju prvi), pa code_variant ASC (niži je bolje)
+            if sort_by == 'kategorija':
+                outer_sort = f"grouped.kategorija {sort_order.upper()}"
+            else:
+                outer_sort = f"grouped.{sort_by} {sort_order.upper()}"
+            
+            query = f"""SELECT grouped.id, grouped.code_base, grouped.code_variant, grouped.ime, grouped.opis, 
+                           grouped.stanje, grouped.boja, grouped.velicina, grouped.slike, grouped.fav,
+                           grouped.kategorija, grouped.cena, grouped.popust, grouped.created_at, grouped.updated_at
+                    FROM (
+                        SELECT DISTINCT ON (p.code_base) p.id, p.code_base, p.code_variant, p.ime, p.opis, p.stanje, 
+                               p.boja, p.velicina, p.slike, p.fav, k.kategorija, p.cena, p.popust, p.created_at, p.updated_at
+                        FROM proizvodi p
+                        LEFT JOIN kategorije k ON p.kategorija = k.id
+                        {where_clause}
+                        ORDER BY p.code_base, p.stanje DESC NULLS LAST, p.code_variant ASC
+                    ) AS grouped
+                    ORDER BY {outer_sort}
+                    LIMIT %s OFFSET %s"""
+        else:
+            query = f"""SELECT p.id, p.code_base, p.code_variant, p.ime, p.opis, p.stanje, p.boja, p.velicina, p.slike, p.fav, 
                            k.kategorija, p.cena, p.popust, p.created_at, p.updated_at 
                     FROM proizvodi p
                     LEFT JOIN kategorije k ON p.kategorija = k.id
