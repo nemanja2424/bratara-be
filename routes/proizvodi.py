@@ -309,11 +309,11 @@ def get_proizvodi():
                 params.extend(boje_list)
         
         if veličine_str:
-            veličine_list = [v.strip() for v in veličine_str.split(',') if v.strip()]
-            if veličine_list:
-                placeholders = ','.join(['%s'] * len(veličine_list))
+            velicine_list = [v.strip() for v in veličine_str.split(',') if v.strip()]
+            if velicine_list:
+                placeholders = ','.join(['%s'] * len(velicine_list))
                 where_conditions.append(f"p.velicina IN ({placeholders})")
-                params.extend(veličine_list)
+                params.extend(velicine_list)
         
         if code_base:
             where_conditions.append("p.code_base = %s")
@@ -771,5 +771,152 @@ def obrisi_sve_varijante(code_base):
             "obrisane_varijante": [dict(v) for v in varijante]
         }), 200
         
+    except Exception as e:
+        return jsonify({"message": f"Greška na serveru: {str(e)}"}), 500
+
+
+@proizvodi_bp.route('/preporuceno', methods=['GET'])
+@jwt_required(optional=True)
+def get_preporuceni_proizvodi():
+    """
+    Preuzima preporučene proizvode sa paginacijom i filterima
+    Query parameters:
+    - limit: broj proizvoda po stranici (default: 50, max: 100)
+    - offset: od kog reda početi (default: 0)
+    - sort_by: sortiranje po (ime, cena, popust, stanje, kategorija, created_at) (default: created_at)
+    - sort_order: asc/desc (default: desc)
+    - kategorije: filter po kategorijama (komma-separated)
+    - boje: filter po bojama (komma-separated)
+    - veličine: filter po veličinama (komma-separated)
+    - min_stanje: minimalno stanje (default: 1)
+
+    Response:
+    {
+        "proizvodi": [...],
+        "pagination": {
+            "limit": 50,
+            "offset": 0,
+            "ukupno_proizvoda": 150
+        }
+    }
+    """
+    try:
+        # Proverava da li je korisnik admin ili staff
+        current_user_id = get_jwt_identity()
+        rola = 0  # Default rola za nekorisnike ili regular customers
+
+        if current_user_id:
+            conn_user = get_db_connection()
+            cur_user = conn_user.cursor(cursor_factory=RealDictCursor)
+            cur_user.execute("SELECT rola FROM users WHERE id = %s", (int(current_user_id),))
+            user = cur_user.fetchone()
+            if user:
+                rola = user['rola']
+            cur_user.close()
+            conn_user.close()
+
+        limit = request.args.get('limit', 20, type=int)
+        offset = request.args.get('offset', 0, type=int)
+        sort_by = request.args.get('sort_by', 'created_at').lower()
+        sort_order = request.args.get('sort_order', 'desc').lower()
+        kategorije_str = request.args.get('kategorije', '').strip()
+        boje_str = request.args.get('boje', '').strip()
+        veličine_str = request.args.get('veličine', '').strip()
+        min_stanje = request.args.get('min_stanje', 1, type=int)
+
+        if limit < 1:
+            limit = 20
+        if limit > 100:
+            limit = 100
+        if offset < 0:
+            offset = 0
+
+        if min_stanje < 0:
+            min_stanje = 1
+
+        allowed_sort_fields = ['ime', 'cena', 'popust', 'stanje', 'kategorija', 'created_at']
+        if sort_by not in allowed_sort_fields:
+            sort_by = 'created_at'
+
+        if sort_order not in ['asc', 'desc']:
+            sort_order = 'desc'
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        where_conditions = []
+        params = []
+
+        # Dodaj filter za preporučene proizvode
+        where_conditions.append("p.code_base IN (SELECT code_base FROM featured_products)")
+
+        if kategorije_str:
+            kategorije_list = [k.strip() for k in kategorije_str.split(',') if k.strip()]
+            if kategorije_list:
+                placeholders = ','.join(['%s'] * len(kategorije_list))
+                where_conditions.append(f"k.kategorija IN ({placeholders})")
+                params.extend(kategorije_list)
+
+        if boje_str:
+            boje_list = [b.strip() for b in boje_str.split(',') if b.strip()]
+            if boje_list:
+                placeholders = ','.join(['%s'] * len(boje_list))
+                where_conditions.append(f"p.boja IN ({placeholders})")
+                params.extend(boje_list)
+
+        if veličine_str:
+            velicine_list = [v.strip() for v in veličine_str.split(',') if v.strip()]
+            if velicine_list:
+                placeholders = ','.join(['%s'] * len(velicine_list))
+                where_conditions.append(f"p.velicina IN ({placeholders})")
+                params.extend(velicine_list)
+
+        # Filter po dostupnosti - samo za obične korisnike (rola 0) i nekorisnike
+        # Admin (rola 1) i staff (rola 2) vide sve proizvode
+        if rola not in [1, 2]:  # Ako NIJE admin ili staff
+            where_conditions.append("p.stanje > 0")
+
+        where_clause = ""
+        if where_conditions:
+            where_clause = "WHERE " + " AND ".join(where_conditions)
+
+        # COUNT query - uvek grupisano po code_base za preporučene
+        count_query = f"SELECT COUNT(DISTINCT p.code_base) as ukupno FROM proizvodi p LEFT JOIN kategorije k ON p.kategorija = k.id {where_clause}"
+        cur.execute(count_query, params)
+        ukupno_proizvoda = cur.fetchone()['ukupno']
+
+        # Uvek koristi DISTINCT ON za grupisanje po code_base
+        # Sortira po redosled iz featured_products, pa po stanje i code_variant
+        query = f"""SELECT grouped.id, grouped.code_base, grouped.code_variant, grouped.ime, grouped.opis, 
+                       grouped.stanje, grouped.boja, grouped.velicina, grouped.slike, grouped.fav,
+                       grouped.kategorija, grouped.cena, grouped.popust, grouped.created_at, grouped.updated_at
+                FROM (
+                    SELECT DISTINCT ON (p.code_base) p.id, p.code_base, p.code_variant, p.ime, p.opis, p.stanje, 
+                           p.boja, p.velicina, p.slike, p.fav, k.kategorija, p.cena, p.popust, p.created_at, p.updated_at,
+                           fp.redosled
+                    FROM proizvodi p
+                    LEFT JOIN kategorije k ON p.kategorija = k.id
+                    LEFT JOIN featured_products fp ON p.code_base = fp.code_base
+                    {where_clause}
+                    ORDER BY p.code_base, p.stanje DESC NULLS LAST, p.code_variant ASC
+                ) AS grouped
+                ORDER BY grouped.redosled ASC
+                LIMIT %s OFFSET %s"""
+
+        params.extend([limit, offset])
+        cur.execute(query, params)
+        proizvodi = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "proizvodi": [dict(p) for p in proizvodi],
+            "pagination": {
+                "limit": limit,
+                "offset": offset,
+                "ukupno_proizvoda": ukupno_proizvoda
+            }
+        }), 200
+
     except Exception as e:
         return jsonify({"message": f"Greška na serveru: {str(e)}"}), 500

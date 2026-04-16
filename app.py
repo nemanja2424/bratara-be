@@ -48,6 +48,9 @@ app.register_blueprint(porudzbine_bp, url_prefix="/api/porudzbine")
 from routes.omiljeno import omiljeno_bp
 app.register_blueprint(omiljeno_bp, url_prefix="/api/omiljeno")
 
+from routes.preporuceno import preporuceno_bp
+app.register_blueprint(preporuceno_bp, url_prefix="/api/preporuceno")
+
 
 # Pokretanje aplikacije
 if __name__ == '__main__':

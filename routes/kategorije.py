@@ -57,7 +57,7 @@ def get_kategorije():
             where_clause = "WHERE active = false"
         # Ako active_param nije prosleđen ili je neka druga vrednost, ne dodajemo WHERE
         
-        query = f"SELECT id, kategorija, active, created_at FROM kategorije {where_clause}"
+        query = f"SELECT id, kategorija, active, parent, created_at FROM kategorije {where_clause}"
         cur.execute(query)
         kategorije = cur.fetchall()
         cur.close()
@@ -78,7 +78,8 @@ def post_kategorije():
     Kreira novu kategoriju
     Request:
     {
-        "kategorija": "Patike"
+        "kategorija": "Patike",
+        "parent": "Obuća"  (obavezno - mora biti jedna od: "Odeća", "Obuća", "Torbe")
     }
     """
     try:
@@ -99,9 +100,18 @@ def post_kategorije():
         if not data or not data.get('kategorija'):
             return jsonify({"message": "Nedostaje naziv kategorije"}), 400
         
-        kategorija = data.get('kategorija')
+        if not data.get('parent'):
+            return jsonify({"message": "Nedostaje parent (mora biti: Odeća, Obuća ili Torbe)"}), 400
         
-        cur.execute("INSERT INTO kategorije (kategorija) VALUES (%s) RETURNING id, kategorija, active, created_at", (kategorija,))
+        kategorija = data.get('kategorija')
+        parent = data.get('parent')
+        
+        # Validacija parent-a
+        valid_parents = ['Odeća', 'Obuća', 'Torbe']
+        if parent not in valid_parents:
+            return jsonify({"message": f"Nevažeći parent. Mora biti jedan od: {', '.join(valid_parents)}"}), 400
+        
+        cur.execute("INSERT INTO kategorije (kategorija, parent) VALUES (%s, %s) RETURNING id, kategorija, active, parent, created_at", (kategorija, parent))
         nova_kategorija = cur.fetchone()
         conn.commit()
         cur.close()
@@ -177,13 +187,15 @@ def delete_kategorije():
 @jwt_required()
 def edit_kategorije():
     """
-    Menja naziv i/ili active status kategorije
+    Menja naziv, parent i/ili active status kategorije
     Request:
     {
         "id": 1,
         "kategorija": "Novi naziv",
+        "parent": "Odeća",
         "active": false
     }
+    parent - opciono, mora biti jedan od: "Odeća", "Obuća", "Torbe"
     """
     try:
         current_user_id = get_jwt_identity()
@@ -205,28 +217,38 @@ def edit_kategorije():
         
         kategorijaId = data.get('id')
         nova_kategorija = data.get('kategorija')
+        parent = data.get('parent')
         active = data.get('active')
         
         # Ako nemamo šta da menjamo
-        if nova_kategorija is None and active is None:
-            return jsonify({"message": "Nedostaje novo naziv ili active status"}), 400
+        if nova_kategorija is None and parent is None and active is None:
+            return jsonify({"message": "Nedostaje novo naziv, parent ili active status"}), 400
+        
+        # Validacija parent-a
+        valid_parents = ['Odeća', 'Obuća', 'Torbe']
+        if parent is not None and parent not in valid_parents:
+            return jsonify({"message": f"Nevažeći parent. Mora biti jedan od: {', '.join(valid_parents)}"}), 400
         
         # Gradimo dinamički query
-        if nova_kategorija is not None and active is not None:
-            cur.execute(
-                "UPDATE kategorije SET kategorija = %s, active = %s WHERE id = %s RETURNING id, kategorija, active, created_at",
-                (nova_kategorija, active, kategorijaId)
-            )
-        elif nova_kategorija is not None:
-            cur.execute(
-                "UPDATE kategorije SET kategorija = %s WHERE id = %s RETURNING id, kategorija, active, created_at",
-                (nova_kategorija, kategorijaId)
-            )
-        else:  # samo active
-            cur.execute(
-                "UPDATE kategorije SET active = %s WHERE id = %s RETURNING id, kategorija, active, created_at",
-                (active, kategorijaId)
-            )
+        update_fields = []
+        params = []
+        
+        if nova_kategorija is not None:
+            update_fields.append("kategorija = %s")
+            params.append(nova_kategorija)
+        
+        if parent is not None:
+            update_fields.append("parent = %s")
+            params.append(parent)
+        
+        if active is not None:
+            update_fields.append("active = %s")
+            params.append(active)
+        
+        params.append(kategorijaId)
+        
+        query = f"UPDATE kategorije SET {', '.join(update_fields)} WHERE id = %s RETURNING id, kategorija, active, parent, created_at"
+        cur.execute(query, params)
         
         azurirana_kategorija = cur.fetchone()
         conn.commit()

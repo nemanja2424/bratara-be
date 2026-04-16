@@ -4,6 +4,7 @@
 /backend_tools/hash_password.py
 /backend_tools/seed_products.py
 /backend_tools/generate_products.json2
+/update_parents.py
 
 /.venv
 
