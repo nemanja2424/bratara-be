@@ -79,13 +79,13 @@ def post_kategorije():
     Request:
     {
         "kategorija": "Patike",
-        "parent": "Obuća"  (obavezno - mora biti jedna od: "Odeća", "Obuća", "Torbe")
+        "parent": "Obuća"  (obavezno - mora biti jedna od: "Odjeća", "Obuća", "Torbe")
     }
     """
     try:
         current_user_id = get_jwt_identity()
         
-        # Provera rola
+        # Provjera rola
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
@@ -101,13 +101,13 @@ def post_kategorije():
             return jsonify({"message": "Nedostaje naziv kategorije"}), 400
         
         if not data.get('parent'):
-            return jsonify({"message": "Nedostaje parent (mora biti: Odeća, Obuća ili Torbe)"}), 400
+            return jsonify({"message": "Nedostaje parent (mora biti: Odjeća, Obuća ili Torbe)"}), 400
         
         kategorija = data.get('kategorija')
         parent = data.get('parent')
         
         # Validacija parent-a
-        valid_parents = ['Odeća', 'Obuća', 'Torbe']
+        valid_parents = ['Odjeća', 'Obuća', 'Torbe']
         if parent not in valid_parents:
             return jsonify({"message": f"Nevažeći parent. Mora biti jedan od: {', '.join(valid_parents)}"}), 400
         
@@ -118,7 +118,7 @@ def post_kategorije():
         conn.close()
         
         return jsonify({
-            "message": "Kategorija je uspešno kreirana",
+            "message": "Kategorija je uspješno kreirana",
             "kategorija": dict(nova_kategorija)
         }), 201
         
@@ -143,7 +143,7 @@ def delete_kategorije():
     try:
         current_user_id = get_jwt_identity()
         
-        # Provera rola
+        # Provjera rola
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
@@ -175,7 +175,7 @@ def delete_kategorije():
         conn.close()
         
         return jsonify({
-            "message": "Kategorija je uspešno obrisana",
+            "message": "Kategorija je uspješno obrisana",
             "kategorija": dict(obrisana_kategorija)
         }), 200
         
@@ -187,20 +187,20 @@ def delete_kategorije():
 @jwt_required()
 def edit_kategorije():
     """
-    Menja naziv, parent i/ili active status kategorije
+    Mijenja naziv, parent i/ili active status kategorije
     Request:
     {
         "id": 1,
         "kategorija": "Novi naziv",
-        "parent": "Odeća",
+        "parent": "Odjeća",
         "active": false
     }
-    parent - opciono, mora biti jedan od: "Odeća", "Obuća", "Torbe"
+    parent - opciono, mora biti jedan od: "Odjeća", "Obuća", "Torbe"
     """
     try:
         current_user_id = get_jwt_identity()
         
-        # Provera rola
+        # Provjera rola
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
@@ -220,12 +220,12 @@ def edit_kategorije():
         parent = data.get('parent')
         active = data.get('active')
         
-        # Ako nemamo šta da menjamo
+        # Ako nemamo šta da mijenjamo
         if nova_kategorija is None and parent is None and active is None:
             return jsonify({"message": "Nedostaje novo naziv, parent ili active status"}), 400
         
         # Validacija parent-a
-        valid_parents = ['Odeća', 'Obuća', 'Torbe']
+        valid_parents = ['Odjeća', 'Obuća', 'Torbe']
         if parent is not None and parent not in valid_parents:
             return jsonify({"message": f"Nevažeći parent. Mora biti jedan od: {', '.join(valid_parents)}"}), 400
         
@@ -260,7 +260,7 @@ def edit_kategorije():
         conn.close()
         
         return jsonify({
-            "message": "Kategorija je uspešno ažurirana",
+            "message": "Kategorija je uspješno ažurirana",
             "kategorija": dict(azurirana_kategorija)
         }), 200
         

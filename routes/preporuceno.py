@@ -109,7 +109,7 @@ def post_preporuceno():
     try:
         current_user_id = get_jwt_identity()
         
-        # Provera rola
+        # Provjera rola
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         

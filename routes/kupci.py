@@ -68,7 +68,7 @@ def get_kupci():
     try:
         current_user_id = get_jwt_identity()
         
-        # Provera rola - samo admin može videti sve kupce
+        # Provjera rola - samo admin može vidjeti sve kupce
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         

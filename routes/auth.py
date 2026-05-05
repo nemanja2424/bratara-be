@@ -51,11 +51,11 @@ def login():
         cur.close()
         conn.close()
         
-        # Provera da li korisnik sa taj email-om postoji
+        # Provjera da li korisnik sa taj email-om postoji
         if not user:
             return jsonify({"message": "Korisnik sa ovim email-om nije pronađen"}), 401
         
-        # Provera da li je lozinka ispravna
+        # Provjera da li je lozinka ispravna
         if not check_password_hash(user['password'], password):
             return jsonify({"message": "Lozinka je pogrešna"}), 401
         
@@ -63,7 +63,7 @@ def login():
         access_token = create_access_token(identity=str(user['id']))
         
         return jsonify({
-            "message": "Uspešno ste se ulogovali",
+            "message": "Uspješno ste se ulogovali",
             "access_token": access_token,
             "user": {
                 "id": user['id'],
@@ -82,7 +82,7 @@ def login():
 @jwt_required()
 def protected():
     """
-    Zaštićena ruta - proverava JWT token i vraća rolu korisnika
+    Zaštićena ruta - provjerava JWT token i vraća rolu korisnika
     Header: Authorization: Bearer <token>
     """
     try:
@@ -126,7 +126,7 @@ def signup():
     
     Response (201):
     {
-        "message": "Uspešno ste se registrovali",
+        "message": "Uspješno ste se registrovali",
         "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
         "user": {
             "id": 1,
@@ -153,7 +153,7 @@ def signup():
         adresa = data.get('adresa', '').strip()
         lozinka = data.get('lozinka', '').strip()
         
-        # Provera obaveznih polja
+        # Provjera obaveznih polja
         if not ime or not email or not lozinka:
             return jsonify({"message": "Nedostaju obavezna polja (ime, email, lozinka)"}), 400
         
@@ -184,7 +184,7 @@ def signup():
             access_token = create_access_token(identity=str(novi_korisnik['id']))
             
             return jsonify({
-                "message": "Uspešno ste se registrovali",
+                "message": "Uspješno ste se registrovali",
                 "access_token": access_token,
                 "user": dict(novi_korisnik)
             }), 201
@@ -205,7 +205,7 @@ def signup():
 def me():
     """
     GET - Vraća podatke o trenutno ulogovanom korisniku
-    PATCH - Menja podatke korisnika (ime, prezime, email, telefon, adresa)
+    PATCH - Mijenja podatke korisnika (ime, prezime, email, telefon, adresa)
     
     Header: Authorization: Bearer <token>
     
@@ -236,7 +236,7 @@ def me():
     
     PATCH Response:
     {
-        "message": "Podaci su uspešno ažurirani",
+        "message": "Podaci su uspje\u0161no a\u017eurirani",
         "user": {
             "id": 1,
             "ime": "Novo Ime",
@@ -326,7 +326,7 @@ def me():
                 fields_to_update['omiljeno'] = Json(omiljeno)
             
             if data.get('email'):
-                # Provera da li email već postoji (za drugog korisnika)
+                # Provjera da li email već postoji (za drugog korisnika)
                 cur.execute(
                     "SELECT id FROM users WHERE email = %s AND id != %s",
                     (data.get('email'), int(current_user_id))
@@ -361,7 +361,7 @@ def me():
             conn.close()
             
             return jsonify({
-                "message": "Podaci su uspešno ažurirani",
+                "message": "Podaci su uspješno ažurirani",
                 "user": dict(azuriran_korisnik)
             }), 200
         
@@ -373,7 +373,7 @@ def me():
 @jwt_required()
 def promeni_lozinku():
     """
-    Menja lozinku korisnika
+    Mijenja lozinku korisnika
     Header: Authorization: Bearer <token>
     
     Request:
@@ -384,7 +384,7 @@ def promeni_lozinku():
     
     Response:
     {
-        "message": "Lozinka je uspešno promenjena"
+        "message": "Lozinka je uspješno promijenjena"
     }
     """
     try:
@@ -413,7 +413,7 @@ def promeni_lozinku():
             conn.close()
             return jsonify({"message": "Korisnik nije pronađen"}), 404
         
-        # Provera da li je stara lozinka ispravna
+        # Provjera da li je stara lozinka ispravna
         if not check_password_hash(user['password'], old_pwd):
             cur.close()
             conn.close()
@@ -432,7 +432,7 @@ def promeni_lozinku():
         conn.close()
         
         return jsonify({
-            "message": "Lozinka je uspešno promenjena"
+            "message": "Lozinka je uspješno promijenjena"
         }), 200
         
     except Exception as e:

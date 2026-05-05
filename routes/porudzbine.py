@@ -168,7 +168,7 @@ def create_order_email_html(porudzbina_id, ime, prezime, email, telefon, adresa,
 
 def create_status_email_html(porudzbina_id, ime, prezime, status):
     """
-    Kreira HTML mejl za obaveštavanje kupca o promeni statusa narudžbine
+    Kreira HTML mejl za obaveštavanje kupca o promijeni statusa narudžbine
     Status opcije: 'u_pripremi', 'u_tranzitu', 'dostavljeno', 'nedostavljeno'
     """
     pregled_link = f"https://butikirna.com/narudzbina/{porudzbina_id}"
@@ -189,7 +189,7 @@ def create_status_email_html(porudzbina_id, ime, prezime, status):
         },
         'dostavljeno': {
             'naslov': '✅ Vaša narudžbina je dostavljena!',
-            'poruka': 'Vaša narudžbina je uspešno dostavljena. Hvala što ste kupili kod nas!',
+            'poruka': 'Vaša narudžbina je uspješno dostavljena. Hvala što ste kupili kod nas!',
             'boja': '#00cc00',
             'emoji': '✅'
         },
@@ -381,7 +381,7 @@ def dodaj_porudzbinu():
     Response:
     {
         "id": 1,
-        "poruka": "Porudzbina uspešno kreirana",
+        "poruka": "Porudzbina uspješno kreirana",
         "cena": 25998,
         "korpa": [...]
     }
@@ -431,7 +431,7 @@ def dodaj_porudzbinu():
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
         # PRVO: Validacija stanja za SVE stavke u korpi
-        print("🔍 Proveravamo stanje proizvoda...")
+        print("🔍 Provjeravamo stanje proizvoda...")
         for stavka in korpa:
             code = stavka['code'].strip()
             kolicina = int(stavka['kolicina'])
@@ -607,7 +607,7 @@ def dodaj_porudzbinu():
         
         return jsonify({
             "id": porudzbina_id,
-            "poruka": "Porudzbina uspešno kreirana",
+            "poruka": "Porudzbina uspješno kreirana",
             "cena": cena_json,
             "broj_stavki": len(validna_korpa),
             "korpa": korpa_json
@@ -836,7 +836,7 @@ def azuriraj_status_porudzbine():
     
     Response:
     {
-        "poruka": "Status ažuriran uspešno",
+        "poruka": "Status ažuriran uspješno",
         "id": 5,
         "status": "u_tranzitu",
         "updated_at": "2026-04-09T20:30:45"
@@ -857,7 +857,7 @@ def azuriraj_status_porudzbine():
         
         user_role = user['rola']
         
-        # Samo admin (1) i zaposleni (2) mogu menjati status
+        # Samo admin (1) i zaposleni (2) mogu mijenjati status
         if user_role not in [1, 2]:
             return jsonify({"message": "Nemate dozvolu za ovu akciju"}), 403
         
@@ -928,7 +928,7 @@ def azuriraj_status_porudzbine():
         conn.close()
         
         return jsonify({
-            "poruka": "Status ažuriran uspešno",
+            "poruka": "Status ažuriran uspješno",
             "id": result['id'],
             "status": result['status'],
             "updated_at": result['updated_at']

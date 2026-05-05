@@ -55,7 +55,7 @@ def dodaj_proizvod():
     try:
         current_user_id = get_jwt_identity()
         
-        # Provera rola
+        # Provjera rola
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
@@ -161,7 +161,7 @@ def dodaj_proizvod():
         conn.close()
         
         return jsonify({
-            "message": f"{len(dodani_proizvodi)} proizvod(a) je uspešno dodan(o)",
+            "message": f"{len(dodani_proizvodi)} proizvod(a) je uspješno dodan(o)",
             "proizvodi": dodani_proizvodi
         }), 201
         
@@ -211,7 +211,7 @@ def get_proizvodi():
     }
     """
     try:
-        # Proverava da li je korisnik admin ili staff
+        # Provjerava da li je korisnik admin ili staff
         current_user_id = get_jwt_identity()
         rola = 0  # Default rola za nekorisnike ili regular customers
         
@@ -272,7 +272,7 @@ def get_proizvodi():
                     code_base_search = parts[0].strip()
                     code_variant_search = parts[1].strip()
                     
-                    # Proveravamo da li je code_variant broj
+                    # Provjeravamo da li je code_variant broj
                     try:
                         code_variant_num = int(code_variant_search)
                         where_conditions.append("(p.code_base ILIKE %s AND p.code_variant = %s)")
@@ -343,7 +343,7 @@ def get_proizvodi():
         
         # Ako je group_by='code_base', koristi DISTINCT ON da biram best variant po code_base
         if group_by == 'code_base':
-            # Subquery: primeni WHERE filters i biram DISTINCT ON (code_base)
+            # Subquery: primijeni WHERE filters i biram DISTINCT ON (code_base)
             # Prioritet: stanje DESC (one na stanju prvi), pa code_variant ASC (niži je bolje)
             if sort_by == 'kategorija':
                 outer_sort = f"grouped.kategorija {sort_order.upper()}"
@@ -424,7 +424,7 @@ def azuriraj_proizvod():
     try:
         current_user_id = get_jwt_identity()
         
-        # Provera rola
+        # Provjera rola
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
@@ -525,7 +525,7 @@ def azuriraj_proizvod():
             conn.close()
             
             return jsonify({
-                "message": f"{len(azurirane_varijante)} varijanta(e) je uspešno ažuriran(o)",
+                "message": f"{len(azurirane_varijante)} varijanta(e) je uspješno ažuriran(o)",
                 "varijante": azurirane_varijante
             }), 200
         
@@ -533,7 +533,7 @@ def azuriraj_proizvod():
         elif data.get('id'):
             proizvod_id = data.get('id')
             
-            # Provera da li proizvod postoji
+            # Provjera da li proizvod postoji
             cur.execute("SELECT * FROM proizvodi WHERE id = %s", (proizvod_id,))
             proizvod = cur.fetchone()
             
@@ -633,7 +633,7 @@ def azuriraj_proizvod():
             conn.close()
             
             return jsonify({
-                "message": "Proizvod je uspešno ažuriran",
+                "message": "Proizvod je uspješno ažuriran",
                 "proizvod": dict(azuriran_proizvod)
             }), 200
         
@@ -655,7 +655,7 @@ def obrisi_proizvod(proizvod_id):
     
     Response:
     {
-        "message": "Proizvod je uspešno obrisan",
+        "message": "Proizvod je uspješno obrisan",
         "proizvod": {
             "id": 1,
             "ime": "Proizvod",
@@ -668,7 +668,7 @@ def obrisi_proizvod(proizvod_id):
     try:
         current_user_id = get_jwt_identity()
         
-        # Provera rola
+        # Provjera rola
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
@@ -699,7 +699,7 @@ def obrisi_proizvod(proizvod_id):
         conn.close()
         
         return jsonify({
-            "message": "Proizvod je uspešno obrisan",
+            "message": "Proizvod je uspješno obrisan",
             "proizvod": dict(proizvod)
         }), 200
         
@@ -718,7 +718,7 @@ def obrisi_sve_varijante(code_base):
     
     Response:
     {
-        "message": "3 varijante su uspešno obrisane",
+        "message": "3 varijante su uspješno obrisane",
         "obrisane_varijante": [
             {
                 "id": 1,
@@ -734,7 +734,7 @@ def obrisi_sve_varijante(code_base):
     try:
         current_user_id = get_jwt_identity()
         
-        # Provera rola
+        # Provjera rola
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
@@ -767,7 +767,7 @@ def obrisi_sve_varijante(code_base):
         broj_obrisanih = len(varijante)
         
         return jsonify({
-            "message": f"{broj_obrisanih} varijanta(e) je uspešno obrisano",
+            "message": f"{broj_obrisanih} varijanta(e) je uspješno obrisano",
             "obrisane_varijante": [dict(v) for v in varijante]
         }), 200
         
@@ -801,7 +801,7 @@ def get_preporuceni_proizvodi():
     }
     """
     try:
-        # Proverava da li je korisnik admin ili staff
+        # Provjerava da li je korisnik admin ili staff
         current_user_id = get_jwt_identity()
         rola = 0  # Default rola za nekorisnike ili regular customers
 
